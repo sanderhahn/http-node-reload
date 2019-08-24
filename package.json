@@ -1,0 +1,13 @@
+{
+    "scripts": {
+        "build": "tsc",
+        "dev": "node build/master.js"
+    },
+    "dependencies": {
+        "polka": "0.5.2"
+    },
+    "devDependencies": {
+        "typescript": "^3.5.3",
+        "@types/node": "^12.7.2"
+    }
+}
