@@ -62,6 +62,11 @@ export function serve(directory: string) {
         const parsed = parse(req.url);
         const pathname = parsed.pathname || "/";
         const filename = resolve(directory, pathname.substring(1));
+        if (!filename.startsWith(directory)) {
+            res.writeHead(404);
+            res.end("Not Found\n");
+            return;
+        }
         const ext = extname(pathname);
         const mime = mimes[ext];
         if (mime) {
