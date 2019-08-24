@@ -38,37 +38,52 @@ function if_not_modified_since(req: IncomingMessage, stats: Stats) {
     return mtime_without_millis <= if_modified_since_date.getTime();
 }
 
+function sendFile(req: IncomingMessage, res: ServerResponse, filename: string, stats: Stats) {
+    const tag = etag(stats);
+    if (if_match_tag(req, tag) || if_not_modified_since(req, stats)) {
+        res.writeHead(304);
+        res.end();
+        return;
+    }
+    res.setHeader("Content-Length", stats.size);
+    res.setHeader("ETag", tag);
+    res.setHeader("Last-Modified", stats.mtime.toUTCString());
+    const s = createReadStream(filename);
+    s.pipe(res, { end: true });
+}
+
 export function serve(directory: string) {
     directory = resolve(directory);
     return (req: IncomingMessage, res: ServerResponse, next: () => void) => {
-        if (req.url) {
-            const parsed = parse(req.url);
-            const pathname = parsed.pathname || "/";
-            const here = resolve(directory, pathname.substring(1));
-            const ext = extname(pathname);
-            const mime = mimes[ext];
-            if (mime) {
-                res.setHeader("Content-Type", mime);
+        if (req.url === undefined) {
+            next();
+            return;
+        }
+        const parsed = parse(req.url);
+        const pathname = parsed.pathname || "/";
+        const filename = resolve(directory, pathname.substring(1));
+        const ext = extname(pathname);
+        const mime = mimes[ext];
+        if (mime) {
+            res.setHeader("Content-Type", mime);
+        }
+        stat(filename, (err, stats) => {
+            if (err) {
+                next();
+                return;
             }
-            stat(here, (err, stats) => {
-                if (err) {
-                    next();
-                } else {
-                    const tag = etag(stats);
-                    if (if_match_tag(req, tag) || if_not_modified_since(req, stats)) {
-                        res.writeHead(304);
-                        res.end();
+            if (stats.isDirectory()) {
+                const index = `${filename}/index.html`;
+                stat(index, (err, stats) => {
+                    if (err) {
+                        next();
                         return;
                     }
-                    res.setHeader("Content-Length", stats.size);
-                    res.setHeader("ETag", tag);
-                    res.setHeader("Last-Modified", stats.mtime.toUTCString());
-                    const s = createReadStream(here);
-                    s.pipe(res, { end: true });
-                }
-            });
-        } else {
-            next();
-        }
+                    sendFile(req, res, index, stats);
+                });
+                return;
+            }
+            sendFile(req, res, filename, stats);
+        });
     }
 }
